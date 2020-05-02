@@ -25,33 +25,33 @@
 #define DEBUG_PRINTLN(s)
 #endif
 
-#define DEBUG_PRINT_VAR(s)	Serial.println(s)
+#define DEBUG_PRINT_VAR(text, var)	DEBUG_PRINT(text); DEBUG_PRINT(": "); DEBUG_PRINTLN(var)
 
-const unsigned char DELIMITER = ';';
-const unsigned char* SHUFFLE_FILE = "_shuffle";
+const char DELIMITER = ';';
+const char* SHUFFLE_FILE = "_shuffle";
 
-const int PIN_SDCARD_CS = 0;
-const int PIN_VS1053_CS = 0;
-const int PIN_VS1053_DCS = 0;
-const int PIN_VS1053_DREQ = 0;
+const int PIN_SDCARD_CS = 10;
+const int PIN_VS1053_CS = 11;
+const int PIN_VS1053_DCS = 12;
+const int PIN_VS1053_DREQ = 1;
 const int PIN_VS1053_RST = -1;
 
-const int PIN_OLED_CS = 0;
-const int PIN_OLED_DC = 0;
+const int PIN_OLED_CS = 7;
+const int PIN_OLED_DC = 9;
 const int PIN_OLED_RST = -1;
 
-const int PIN_MFRC522_CS = 0;
-const int PIN_MFRC522_RST = 0;
+const int PIN_MFRC522_CS = 3;
+const int PIN_MFRC522_RST = 4;
 const int PIN_MFRC522_IRQ = 0;
 
-const int PIN_BUTTON_PLAY = 0;
-const int PIN_BUTTON_NEXT = 0;
-const int PIN_BUTTON_PREV = 0;
-const int PIN_POT_VOLUME = 0;
+const int PIN_BUTTON_PLAY = A3;
+const int PIN_BUTTON_NEXT = A2;
+const int PIN_BUTTON_PREV = A4;
+const int PIN_POT_VOLUME = A1;
 
-const int PIN_SHUTDOWN = 0;
+const int PIN_SHUTDOWN = 13;
 
-const int PIN_BATTERY_PROBE = 0;
+const int PIN_BATTERY_PROBE = A0;
 
 #define RGB565(RGB88) (((RGB88&0xf80000)>>8) + ((RGB88&0xfc00)>>5) + ((RGB88&0xf8)>>3))
 const uint16_t COLOR_BLACK = RGB565(0x0);
@@ -98,10 +98,19 @@ bool isSingleFile = false;
 
 std::string currentPathDirectory("");
 std::string currentPathFile("");
-File currentFile = NULL;
-File currentDirectory = NULL;
+File currentFile;
+File currentDirectory;
 File sdRoot;
 long numFilesInDir = 0;
+
+typedef struct
+{
+	//std::string card;
+	byte card[4];
+	std::string file;
+} Action;
+
+std::vector<Action> actions;
 
 std::string dirname(std::string file)
 {
@@ -134,23 +143,17 @@ int isBatteryGood(bool ignoreTimer = false)
 
 void setupDisplay()
 {
-	#ifdef DEBUG
-	Serial.print("setup Display... ");
-	#endif
+	DEBUG_PRINT("setup Display... ");
 
 	display.begin();
 	display_init();
 
-	#ifdef DEBUG
-	Serial.println("done");
-	#endif
+	DEBUG_PRINTLN("done");
 }
 
 void setupSD()
 {
-	#ifdef DEBUG
-	Serial.print("setup SD... ");
-	#endif
+	DEBUG_PRINT("setup SD... ");
 
 	if(!SD.begin(PIN_SDCARD_CS, SD_SCK_MHZ(10))) { // Breakouts require 10 MHz limit due to longer wires
 		Serial.println(F("SD begin() failed"));
@@ -159,16 +162,12 @@ void setupSD()
 
 	sdRoot = SD.open("/");
 
-	#ifdef DEBUG
-	Serial.println("done");
-	#endif
+	DEBUG_PRINTLN("done");
 }
 
 void setupMusic()
 {
-	#ifdef DEBUG
-	Serial.print("setup Music... ");
-	#endif
+	DEBUG_PRINT("setup Music... ");
 
 	if (! musicPlayer.begin()) { // initialise the music player
 		Serial.println(F("Couldn't find VS1053, do you have the right pins defined?"));
@@ -184,31 +183,23 @@ void setupMusic()
 	musicPlayer.setVolume(10,10);
 	musicPlayer.useInterrupt(VS1053_FILEPLAYER_PIN_INT);
 
-	#ifdef DEBUG
-	Serial.println("done");
-	#endif
+	DEBUG_PRINTLN("done");
 }
 
 void setupAMP()
 {
-	#ifdef DEBUG
-	Serial.print("setup AMP... ");
-	#endif
+	DEBUG_PRINT("setup AMP... ");
 
 	audioamp.begin();
 	audioamp.enableChannel(true, true);
 	audioamp.setAGCCompression(TPA2016_AGC_2);
 
-	#ifdef DEBUG
-	Serial.println("done");
-	#endif
+	DEBUG_PRINTLN("done");
 }
 
 void setupRFID()
 {
-	#ifdef DEBUG
-	Serial.print("setup RFID... ");
-	#endif
+	DEBUG_PRINT("setup RFID... ");
 
 	SPI.begin(); // Init SPI bus
 	rfid.PCD_Init(); // Init MFRC522 
@@ -221,9 +212,7 @@ void setupRFID()
 	Serial.print(F("Using the following key:"));
 	printHex(rfidKey.keyByte, MFRC522::MF_KEY_SIZE);
 
-	#ifdef DEBUG
-	Serial.println("done");
-	#endif
+	DEBUG_PRINTLN("done");
 }
 
 void setupRandomizer()
@@ -236,9 +225,7 @@ void setup()
 	Serial.begin(115200);
 	while (!Serial) { delay(1); }
 
-	#ifdef DEBUG
-	Serial.println("Setup musikschlumpf...");
-	#endif
+	DEBUG_PRINTLN("setup musikschlumpf... ");
 
 	setupDisplay();
 	setupAMP();
@@ -252,9 +239,7 @@ void setup()
 
 	display_hello();
 
-	#ifdef DEBUG
-	Serial.println("hello");
-	#endif
+	DEBUG_PRINTLN("setup musikschlumpf... done");
 }
 
 void setupButtons()
@@ -281,10 +266,10 @@ void checkButtons()
 	if(buttonPlay.read() == LOW)
 	{
 		if (! musicPlayer.paused()) {
-			Serial.println("Paused");
+			DEBUG_PRINTLN("Paused");
 			musicPlayer.pausePlaying(true);
 		} else { 
-			Serial.println("Resumed");
+			DEBUG_PRINTLN("Resumed");
 			musicPlayer.pausePlaying(false);
 		}
 		playing = musicPlayer.paused();
@@ -308,7 +293,7 @@ void playNewFile(bool next)
 	if(isSingleFile)
 		return;
 
-	bool shuffle = currentDirectory.exists("shuffle");
+	bool shuffle = currentDirectory.exists(SHUFFLE_FILE);
 
 	if(shuffle)
 	{
@@ -332,7 +317,7 @@ void playNewFile(bool next)
 void play(File file)
 {
 	std::string fullFilePath("/");
-	const unsigned int NAME_LEN = 128;
+	size_t NAME_LEN = 128;
 	char name[NAME_LEN];
 	file.getName(name, NAME_LEN);
 	fullFilePath.append(currentPathDirectory).append("/").append(name);
@@ -348,10 +333,10 @@ unsigned int countFilesInDir(File directory)
 	File entry = currentDirectory.openNextFile();
 	while(entry)
 	{
-		const unsigned int NAME_LEN = 13;
-		char *name[NAME_LEN];
+		size_t NAME_LEN = 13;
+		char name[NAME_LEN];
 		entry.getName(name, NAME_LEN);
-		if(entry.isFile && name[0] != '_')
+		if(entry.isFile() && name[0] != '_')
 			++count;
 		entry = currentDirectory.openNextFile();
 	}
@@ -375,25 +360,35 @@ bool isShuffleDir(File directory)
 	return directory.exists(SHUFFLE_FILE);
 }
 
+bool compare(byte a[4], byte b[4])
+{
+	return  a[0] == b[0] &&
+			a[1] == b[1] &&
+			a[2] == b[2] &&
+			a[3] == b[3];
+}
+
 void playByNewCard()
 {
 	for(auto &action: actions)
 	{
-		if(!actions.card.compare())
+		if(compare(action.card, nuidPICC))
 		{
-			currentPathDirectory = actions.card.file;
-			if(sdRoot.exists(currentPathDirectory))
+			currentPathDirectory = action.file;
+			if(sdRoot.exists(currentPathDirectory.c_str()))
 			{
-				currentDirectory = sdRoot.open(currentPathDirectory);
+				currentDirectory.close();
+				sdRoot.open(&currentDirectory, currentPathDirectory.c_str(), O_RDONLY);
 				numFilesInDir = countFilesInDir(currentDirectory);
 
-				File mp3 = NULL;
+				File mp3;
 				if(isShuffleDir(currentDirectory))
 					mp3 = randomFile(currentDirectory);
 				else
 					mp3 = nextFile(currentDirectory);
 
-				musicPlayer.startPlayingFile				
+				if(mp3 == true)
+					play(mp3);
 			}
 
 			return;
@@ -470,15 +465,6 @@ bool checkRFIDForNewCard()
   return true;
 }
 
-typedef struct
-{
-	//std::string card;
-	byte card[4];
-	std::string file;
-} Action;
-
-std::vector<Action> actions;
-
 byte charToByte(char c)
 {
 	if(c >= '0' && c <= '9')
@@ -488,9 +474,7 @@ byte charToByte(char c)
 	else if (c >= 'a' && c <= 'f')
 		return (10 + (c - 'a'));
 
-	#ifdef DEBUG
-	Serial.printf("charToByte: unkown char %c\n", c);
-	#endif
+	DEBUG_PRINT_VAR("charToByte unkown char", c);
 
 	return 0;
 }
@@ -536,7 +520,7 @@ void setupActions()
 	    		{
 	    			//action.card.assign(buffer, index);
 	    			for(unsigned int i = 0; i < 4; ++i)
-	    				action.card[i] = charToByte(buffer[2*i+0]) << 4 + charToByte(buffer[2*i+0]);
+	    				action.card[i] = (charToByte(buffer[2*i+0]) << 4) + (charToByte(buffer[2*i+0]));
 	    			READ++;
 	    		}
 
@@ -550,8 +534,8 @@ void setupActions()
     }
     fileActions.close();
 
-#if DEBUG
-    Serial.println("I parsed the following actions:")
+#ifdef DEBUG
+    Serial.println("I parsed the following actions:");
 	for(const auto& action: actions) {
 	    Serial.printf("  %c:%c:%c:%c : %s\n", action.card[0], action.card[1], action.card[2], action.card[3], action.file.c_str());
 	}
