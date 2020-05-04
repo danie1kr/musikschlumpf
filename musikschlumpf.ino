@@ -29,6 +29,7 @@
 
 const char DELIMITER = ';';
 const char* SHUFFLE_FILE = "_shuffle";
+const char* COVER_FILE = "_cover.bmp";
 
 const int PIN_SDCARD_CS = 10;
 const int PIN_VS1053_CS = 11;
@@ -103,6 +104,7 @@ bool isSingleFile = false;
 
 std::string currentPathDirectory("");
 std::string currentMP3("");
+std::string currentCover("");
 File currentDirectory;
 File sdRoot;
 File artwork;
@@ -147,6 +149,39 @@ int isBatteryGood(bool ignoreTimer = false)
 			return 0;
 	}
 	return 1;
+}
+
+void display_text(const char* string, unsigned int x, unsigned int y, unsigned int size = 1, uint16_t color = COLOR_WHITE)
+{
+	display.setTextColor(color);
+	display.setCursor(x, y);
+	display.setTextSize(size);
+
+	display.println(string);
+}
+
+void display_init()
+{
+	display_clear();
+	display_text("Musikschlumpf", 4, 48, 3, COLOR_WHITE);
+}
+
+void display_hello()
+{
+	display_clear();
+	display_text("Musikschlumpf ist bereit", 4, 48, 3, COLOR_WHITE);
+}
+
+void display_clear()
+{
+	display.fillScreen(COLOR_BACKGROUND);
+}
+
+void display_status()
+{
+	display.fillRect(0,0, 127, 10, COLOR_BLACK);
+	if(playing)
+		display_text("play", 9, 2, 2, COLOR_WHITE);
 }
 
 void setupDisplay()
@@ -382,8 +417,8 @@ void generatePlaylist(std::string fullDirectoryPath, File directory)
 		if(name[0] == '_')
 			continue;
 
-		std::string fullFilePath = fullDirectoryPath;
-		fullFilePath.append("/").append(name);
+		std::string fullFilePath = "/";
+		fullFilePath.append(fullDirectoryPath).append("/").append(name);
 
 		if(musicPlayer.isMP3File(fullFilePath.c_str()))
 			playlist.push_back(fullFilePath);
@@ -407,7 +442,8 @@ void playByNewCard()
 			{
 				currentDirectory.close();
 				sdRoot.open(&currentDirectory, currentPathDirectory.c_str(), O_RDONLY);
-				generatePlaylist(currentPathDirectory.c_str(), currentDirectory);
+				generatePlaylist(currentPathDirectory, currentDirectory);
+				displayCover(currentPathDirectory, currentDirectory);
 				playNext();
 			}
 			return;
@@ -419,6 +455,27 @@ void playByNewCard()
 		DEBUG_PRINT(nuidPICC[i]);
 	DEBUG_PRINTLN(" :(");
 	#endif
+}
+
+void displayCover(std::string fullDirectoryPath, File directory)
+{
+	if(directory.exists(COVER_FILE))
+	{
+		currentCover = "/";
+		currentCover.append(fullDirectoryPath).append("/").append(COVER_FILE);
+
+		char *cover_cstr = new char[currentCover.length() + 1];
+		strcpy(cover_cstr, currentCover.c_str());
+		ImageReturnCode stat = reader.drawBMP(cover_cstr, display, 0, 0);
+		delete[] cover_cstr;
+
+		if(stat != IMAGE_SUCCESS)
+		{
+			DEBUG_PRINTLN("failed to display cover");
+		}
+	}
+	else
+		display_text(fullDirectoryPath.c_str(), 3, 32);
 }
 
 void checkHeadphonePlugAndVolume()
@@ -610,39 +667,6 @@ void card_updated()
 		else
 			play action.file
 	*/
-}
-
-void display_text(const char* string, unsigned int x, unsigned int y, unsigned int size = 1, uint16_t color = COLOR_WHITE)
-{
-	display.setTextColor(color);
-	display.setCursor(x, y);
-	display.setTextSize(size);
-
-	display.println(string);
-}
-
-void display_init()
-{
-	display_clear();
-	display_text("Musikschlumpf", 4, 48, 3, COLOR_WHITE);
-}
-
-void display_hello()
-{
-	display_clear();
-	display_text("Musikschlumpf ist bereit", 4, 48, 3, COLOR_WHITE);
-}
-
-void display_clear()
-{
-	display.fillScreen(COLOR_BACKGROUND);
-}
-
-void display_status()
-{
-	display.fillRect(0,0, 127, 10, COLOR_BLACK);
-	if(playing)
-		display_text("play", 9, 2, 2, COLOR_WHITE);
 }
 
 /**
