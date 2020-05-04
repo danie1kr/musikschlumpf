@@ -49,6 +49,10 @@ const int PIN_BUTTON_NEXT = A2;
 const int PIN_BUTTON_PREV = A4;
 const int PIN_POT_VOLUME = A1;
 
+const int PIN_AMP_SD = 2;
+
+const int PIN_PLUG_DETECT = A5;
+
 const int PIN_SHUTDOWN = 13;
 
 const int PIN_BATTERY_PROBE = A0;
@@ -68,7 +72,8 @@ Chrono  chronoResetCH4 = Chrono(Chrono::MILLIS);
 Bounce buttonPlay = Bounce();
 Bounce buttonPrev = Bounce();
 Bounce buttonNext = Bounce();
-Bounce buttons[3] = { buttonPlay, buttonPrev, buttonNext };
+Bounce plugDetect = Bounce();
+Bounce buttons[4] = { buttonPlay, buttonPrev, buttonNext, plugDetect };
 
 // SD
 SdFat                SD;         // SD card filesystem
@@ -97,11 +102,14 @@ bool isAudioBook = false;
 bool isSingleFile = false;
 
 std::string currentPathDirectory("");
-std::string currentPathFile("");
-File currentFile;
+std::string currentMP3("");
 File currentDirectory;
 File sdRoot;
-long numFilesInDir = 0;
+File artwork;
+std::vector<std::string> playlist;
+long currentPlaylistIndex = 0;
+
+int volume = 255;
 
 typedef struct
 {
@@ -180,7 +188,7 @@ void setupMusic()
 	//printDirectory(SD.open("/"), 0);
 
 	// Set volume for left, right channels. lower numbers == louder volume!
-	musicPlayer.setVolume(10,10);
+	musicPlayer.setVolume(volume, volume);
 	musicPlayer.useInterrupt(VS1053_FILEPLAYER_PIN_INT);
 
 	DEBUG_PRINTLN("done");
@@ -189,6 +197,9 @@ void setupMusic()
 void setupAMP()
 {
 	DEBUG_PRINT("setup AMP... ");
+
+	pinMode(PIN_AMP_SD, OUTPUT);
+	digitalWrite(PIN_AMP_SD, HIGH);
 
 	audioamp.begin();
 	audioamp.enableChannel(true, true);
@@ -220,8 +231,31 @@ void setupRandomizer()
 	randomSeed(analogRead(PIN_BATTERY_PROBE) + analogRead(PIN_POT_VOLUME));
 }
 
+void setupButtonsAndVolume()
+{
+	pinMode(PIN_BUTTON_PLAY, INPUT_PULLUP);
+	pinMode(PIN_BUTTON_NEXT, INPUT_PULLUP);
+	pinMode(PIN_BUTTON_PREV, INPUT_PULLUP);
+	pinMode(PIN_PLUG_DETECT, INPUT_PULLUP);
+
+	buttonPlay.attach(PIN_BUTTON_PLAY);
+	buttonPlay.interval(25);
+	buttonPrev.attach(PIN_BUTTON_PREV);
+	buttonPrev.interval(25);
+	buttonNext.attach(PIN_BUTTON_NEXT);
+	buttonNext.interval(25);
+	plugDetect.attach(PIN_PLUG_DETECT);
+	plugDetect.interval(25);
+
+	// PIN_POT_VOLUME
+	analogReadResolution(10);
+}
+
 void setup()
 {
+	pinMode(PIN_SHUTDOWN, OUTPUT);
+	digitalWrite(PIN_SHUTDOWN, LOW);
+
 	Serial.begin(115200);
 	while (!Serial) { delay(1); }
 
@@ -232,7 +266,7 @@ void setup()
 	setupSD();
 	setupActions();
 	setupMusic();
-	setupButtons();
+	setupButtonsAndVolume();
 	setupRFID();
 
 	setupRandomizer();
@@ -240,20 +274,6 @@ void setup()
 	display_hello();
 
 	DEBUG_PRINTLN("setup musikschlumpf... done");
-}
-
-void setupButtons()
-{
-	pinMode(PIN_BUTTON_PLAY, INPUT_PULLUP);
-	pinMode(PIN_BUTTON_NEXT, INPUT_PULLUP);
-	pinMode(PIN_BUTTON_PREV, INPUT_PULLUP);
-
-	buttonPlay.attach(PIN_BUTTON_PLAY);
-	buttonPlay.interval(25);
-	buttonPrev.attach(PIN_BUTTON_PREV);
-	buttonPrev.interval(25);
-	buttonNext.attach(PIN_BUTTON_NEXT);
-	buttonNext.interval(25);
 }
 
 void checkButtons()
@@ -273,86 +293,63 @@ void checkButtons()
 			musicPlayer.pausePlaying(false);
 		}
 		playing = musicPlayer.paused();
+
+		action = true;
 	}
 	if(buttonNext.read() == LOW)
 	{
-		playNewFile(true);
-		File next = currentDirectory.openNextFile();
-		if(!next)
-		currentFile = currentDirectory.openNextFile();
+		playNext();
+		action = true;
 	}
 	if(buttonPrev.read() == LOW)
-		playNewFile(false);
+	{
+		musicPlayer.stopPlaying();
+		delay(100);
+		play(currentMP3);
+		
+		action = true;
+	}
 
 	if(action)
 		chronoShutDown.restart(0);
 }
 
-void playNewFile(bool next)
+void play(std::string file)
 {
-	if(isSingleFile)
-		return;
-
-	bool shuffle = currentDirectory.exists(SHUFFLE_FILE);
-
-	if(shuffle)
+	if(musicPlayer.isMP3File(file.c_str()))
 	{
-		File entry =  currentDirectory.openNextFile();
-		// count files
-		// pick random one
-	}
-	else
-	{}
+		musicPlayer.startPlayingFile(file.c_str());
+		currentMP3 = file;
 
-	if(next)
-	{
-
+		DEBUG_PRINT_VAR("playing file: ", file.c_str());
 	}
 	else
 	{
-
+		DEBUG_PRINT_VAR("not a valid mp3 file", file.c_str());
 	}
 }
 
-void play(File file)
+std::string getRandomFile()
 {
-	std::string fullFilePath("/");
-	size_t NAME_LEN = 128;
-	char name[NAME_LEN];
-	file.getName(name, NAME_LEN);
-	fullFilePath.append(currentPathDirectory).append("/").append(name);
-	musicPlayer.startPlayingFile(fullFilePath.c_str());
-
-	DEBUG_PRINT("playing file: ");
-	DEBUG_PRINTLN(fullFilePath.c_str());
+	currentPlaylistIndex = random(0, playlist.size()-1);
+	return playlist[currentPlaylistIndex];
 }
 
-unsigned int countFilesInDir(File directory)
+std::string getNextFile()
 {
-	unsigned int count = 0;
-	File entry = currentDirectory.openNextFile();
-	while(entry)
-	{
-		size_t NAME_LEN = 13;
-		char name[NAME_LEN];
-		entry.getName(name, NAME_LEN);
-		if(entry.isFile() && name[0] != '_')
-			++count;
-		entry = currentDirectory.openNextFile();
-	}
-	currentDirectory.rewind();
-
-	return count;
+	currentPlaylistIndex = (currentPlaylistIndex + 1) % playlist.size();
+	return playlist[currentPlaylistIndex];
 }
 
-File randomFile(File directory)
+void playNext()
 {
+	std::string mp3;
+	if(isShuffleDir(currentDirectory))
+		mp3 = getRandomFile();
+	else
+		mp3 = getNextFile();
 
-}
-
-File nextFile(File directory)
-{
-
+	play(mp3);
 }
 
 bool isShuffleDir(File directory)
@@ -368,6 +365,37 @@ bool compare(byte a[4], byte b[4])
 			a[3] == b[3];
 }
 
+void generatePlaylist(std::string fullDirectoryPath, File directory)
+{
+	playlist.clear();
+	currentPlaylistIndex = 0;
+
+	File entry;
+	while(entry = directory.openNextFile())
+	{
+		if(!entry.isFile())
+			continue;
+
+		size_t NAME_LEN = 13;
+		char name[NAME_LEN];
+		entry.getName(name, NAME_LEN);
+		if(name[0] == '_')
+			continue;
+
+		std::string fullFilePath = fullDirectoryPath;
+		fullFilePath.append("/").append(name);
+
+		if(musicPlayer.isMP3File(fullFilePath.c_str()))
+			playlist.push_back(fullFilePath);
+	}
+
+	#ifdef DEBUG
+	DEBUG_PRINTLN("playlist:");
+	for(auto &s: playlist)
+		DEBUG_PRINTLN(s.c_str());
+	#endif
+}
+
 void playByNewCard()
 {
 	for(auto &action: actions)
@@ -379,36 +407,60 @@ void playByNewCard()
 			{
 				currentDirectory.close();
 				sdRoot.open(&currentDirectory, currentPathDirectory.c_str(), O_RDONLY);
-				numFilesInDir = countFilesInDir(currentDirectory);
-
-				File mp3;
-				if(isShuffleDir(currentDirectory))
-					mp3 = randomFile(currentDirectory);
-				else
-					mp3 = nextFile(currentDirectory);
-
-				if(mp3 == true)
-					play(mp3);
+				generatePlaylist(currentPathDirectory.c_str(), currentDirectory);
+				playNext();
 			}
-
 			return;
 		}
+	}
+	#ifdef DEBUG
+	DEBUG_PRINT("unknown new card ");
+	for(int i = 0; i < 4; ++i)
+		DEBUG_PRINT(nuidPICC[i]);
+	DEBUG_PRINTLN(" :(");
+	#endif
+}
+
+void checkHeadphonePlugAndVolume()
+{
+	plugDetect.update();
+	int v = analogRead(PIN_POT_VOLUME) / 4;
+
+	if(abs(v-volume) > 5)
+		volume = v;
+
+	musicPlayer.setVolume(volume, volume);
+
+	// not plugged in = SPEAKERS
+	if(buttonPrev.read() == HIGH)
+	{
+		audioamp.enableChannel(true, true);
+
+	}
+	// plugged in = HEADPHONES
+	else
+	{
+		audioamp.enableChannel(false, false);
 	}
 }
 
 void loop()
 {
 	checkButtons();
+	checkHeadphonePlugAndVolume();
 
 	isBatteryGood();
 
 	if(checkRFIDForNewCard())
 	{
-
+		playByNewCard();
 	}
 
 	if(chronoShutDown.hasPassed(2*60*60))
-		;// digitalWrite(PIN_SHUTDOWN, HIGH);
+	{
+		DEBUG_PRINTLN("goodbye");
+		digitalWrite(PIN_SHUTDOWN, HIGH);
+	}
 
 	delay(500);
 }
