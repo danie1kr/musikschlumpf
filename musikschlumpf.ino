@@ -101,6 +101,7 @@ byte nuidPICC[4];
 bool playing = false;
 bool isAudioBook = false;
 bool isSingleFile = false;
+bool headphonePluggedIn = false;
 
 std::string currentPathDirectory("");
 std::string currentMP3("");
@@ -484,20 +485,26 @@ void checkHeadphonePlugAndVolume()
 	int v = analogRead(PIN_POT_VOLUME) / 4;
 
 	if(abs(v-volume) > 5)
+	{
 		volume = v;
-
-	musicPlayer.setVolume(volume, volume);
-
-	// not plugged in = SPEAKERS
-	if(buttonPrev.read() == HIGH)
-	{
-		audioamp.enableChannel(true, true);
-
+		musicPlayer.setVolume(volume, volume);
 	}
-	// plugged in = HEADPHONES
-	else
+
+	bool plugDetected = plugDetect.read() == HIGH;
+	if(plugDetected != headphonePluggedIn)
 	{
-		audioamp.enableChannel(false, false);
+		headphonePluggedIn = plugDetected;
+	
+		// plugged in = HEADPHONES
+		if(headphonePluggedIn)
+		{
+			audioamp.enableChannel(false, false);
+		}
+		// not plugged in = SPEAKERS
+		else
+		{
+			audioamp.enableChannel(true, true);
+		}
 	}
 }
 
@@ -615,6 +622,7 @@ void setupActions()
     			action.card[1] = 0xad;
     			action.card[2] = 0xf0;
     			action.card[3] = 0x0d;
+    			action.file = "";
 	    	}
 	    	else if(!skipLine)
 	    	{
@@ -627,7 +635,6 @@ void setupActions()
 	    		}
 	    		else if(c == DELIMITER)
 	    		{
-	    			//action.card.assign(buffer, index);
 	    			for(unsigned int i = 0; i < 4; ++i)
 	    				action.card[i] = (charToByte(buffer[2*i+0]) << 4) + (charToByte(buffer[2*i+0]));
 	    			READ++;
@@ -650,23 +657,6 @@ void setupActions()
 	}
 	Serial.println("");
 #endif
-}
-
-void card_updated()
-{
-	/*
-	find action
-	if action
-		clear display
-		load bmp
-		display bmp
-		display title
-
-		if is_dir
-			play first
-		else
-			play action.file
-	*/
 }
 
 /**
