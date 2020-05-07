@@ -495,6 +495,7 @@ void checkHeadphonePlugAndVolume()
 	{
 		volume = v;
 		musicPlayer.setVolume(volume, volume);
+		DEBUG_PRINT_VAR("new volume", volume);
 	}
 
 	bool plugDetected = plugDetect.read() == HIGH;
@@ -506,11 +507,13 @@ void checkHeadphonePlugAndVolume()
 		if(headphonePluggedIn)
 		{
 			audioamp.enableChannel(false, false);
+			DEBUG_PRINTLN("headphone present");
 		}
 		// not plugged in = SPEAKERS
 		else
 		{
 			audioamp.enableChannel(true, true);
+			DEBUG_PRINTLN("headphone removed");
 		}
 	}
 }
