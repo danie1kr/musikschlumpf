@@ -30,6 +30,7 @@
 const char DELIMITER = ';';
 const char* SHUFFLE_FILE = "_shuffle";
 const char* COVER_FILE = "_cover.bmp";
+const char* ACTIONS_FILE = "musikschlumpf.txt";
 
 const int PIN_SDCARD_CS = 10;
 const int PIN_VS1053_CS = 11;
@@ -57,6 +58,8 @@ const int PIN_PLUG_DETECT = A5;
 const int PIN_SHUTDOWN = 13;
 
 const int PIN_BATTERY_PROBE = A0;
+
+const int DISPLAY_ROTATION = 0;
 
 #define RGB565(RGB88) (((RGB88&0xf80000)>>8) + ((RGB88&0xfc00)>>5) + ((RGB88&0xf8)>>3))
 const uint16_t COLOR_BLACK = RGB565(0x0);
@@ -190,6 +193,7 @@ void setupDisplay()
 	DEBUG_PRINT("setup Display... ");
 
 	display.begin();
+	display.setRotation(DISPLAY_ROTATION);
 	display_init();
 
 	DEBUG_PRINTLN("done");
@@ -321,6 +325,7 @@ void checkButtons()
 
 	if(buttonPlay.read() == LOW)
 	{
+		DEBUG_PRINT("button Play: ");
 		if (! musicPlayer.paused()) {
 			DEBUG_PRINTLN("Paused");
 			musicPlayer.pausePlaying(true);
@@ -334,11 +339,13 @@ void checkButtons()
 	}
 	if(buttonNext.read() == LOW)
 	{
+		DEBUG_PRINTLN("button Next");
 		playNext();
 		action = true;
 	}
 	if(buttonPrev.read() == LOW)
 	{
+		DEBUG_PRINTLN("button Prev");
 		musicPlayer.stopPlaying();
 		delay(100);
 		play(currentMP3);
@@ -597,7 +604,7 @@ byte charToByte(char c)
 
 void setupActions()
 {
-	File fileActions = SD.open("musikschlumpf.txt");
+	File fileActions = SD.open(ACTIONS_FILE);
 	if (fileActions)
 	{
 		bool skipLine = false;
