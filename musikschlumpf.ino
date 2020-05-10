@@ -285,7 +285,7 @@ void setupMusic()
 		while (1);
 	}
 
-	Serial.println(F("VS1053 found"));
+	DEBUG_PRINT(F("VS1053 found"));
 
 	// list files
 	//printDirectory(SD.open("/"), 0);
@@ -644,9 +644,9 @@ bool checkRFIDForNewCard()
 		return false;
 	}
 
-	Serial.print(F("PICC type: "));
+	DEBUG_PRINT(F("PICC type: "));
 	MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-	Serial.println(rfid.PICC_GetTypeName(piccType));
+	DEBUG_PRINTLN(rfid.PICC_GetTypeName(piccType));
 
 	// Check is the PICC of Classic MIFARE type
 	if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&  
@@ -655,6 +655,8 @@ bool checkRFIDForNewCard()
 		DEBUG_PRINTLN(F("Your tag is not of type MIFARE Classic."));
 		return false;
 	}
+
+	bool retVal = false;
 
 	if (rfid.uid.uidByte[0] != nuidPICC[0] || 
 	rfid.uid.uidByte[1] != nuidPICC[1] || 
@@ -667,6 +669,7 @@ bool checkRFIDForNewCard()
 			nuidPICC[i] = rfid.uid.uidByte[i];
 		}
 
+		#ifdef DEBUG
 		Serial.println(F("The NUID tag is:"));
 		Serial.print(F("In hex: "));
 		printHex(rfid.uid.uidByte, rfid.uid.size);
@@ -674,6 +677,9 @@ bool checkRFIDForNewCard()
 		Serial.print(F("In dec: "));
 		printDec(rfid.uid.uidByte, rfid.uid.size);
 		Serial.println();
+		#endif
+
+		retVal = true;
 	}
 	else 
 		DEBUG_PRINTLN(F("Card read previously."));
@@ -684,7 +690,7 @@ bool checkRFIDForNewCard()
 	// Stop encryption on PCD
 	rfid.PCD_StopCrypto1();
 
-	return true;
+	return retVal;
 }
 
 byte charToByte(char c)
