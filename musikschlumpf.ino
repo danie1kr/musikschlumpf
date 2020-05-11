@@ -207,7 +207,7 @@ void display_text(const char* string, unsigned int x, unsigned int y, unsigned i
 void display_init()
 {
 	display_clear();
-	display_text("Musikschlumpf", 4, 48, 3, COLOR_WHITE);
+	display_text("Musikschlumpf", 4, 48, 1, COLOR_WHITE);
 }
 
 void display_hello()
@@ -545,6 +545,7 @@ void playByNewCard()
 				#ifdef DEBUG
 				currentDirectory.open(&sdRoot, currentPathDirectory.c_str(), O_RDONLY);
 				printDirectory(currentDirectory, 0);
+				currentDirectory.close();
 				#endif
 				currentDirectory.open(&sdRoot, currentPathDirectory.c_str(), O_RDONLY);
 				generatePlaylist(currentPathDirectory, currentDirectory);
@@ -800,7 +801,7 @@ void setupActions()
 void setup()
 {
 	pinMode(PIN_SHUTDOWN, OUTPUT);
-	digitalWrite(PIN_SHUTDOWN, HIGH);
+	digitalWrite(PIN_SHUTDOWN, LOW);
 
 	pinMode(PIN_SDCARD_CS, OUTPUT);
 	digitalWrite(PIN_SDCARD_CS, HIGH);
