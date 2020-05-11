@@ -35,6 +35,7 @@ const char* WALLPAPER_DIR = "wallpape";
 const char* FULL_WALLPAPER_DIR = "/wallpape";
 
 const int SHUTDOWN_TIMEOUT = 20*60;
+const int REWIND_TIMEOUT = 20;
 
 const int PIN_SDCARD_CS = 10;
 const int PIN_VS1053_CS = 11;
@@ -63,7 +64,7 @@ const int PIN_SHUTDOWN = 0;//4; // never 13!
 
 const int PIN_BATTERY_PROBE = A0;
 
-const int DISPLAY_ROTATION = 0;
+const int DISPLAY_ROTATION = 2;
 
 #define RGB565(RGB88) (((RGB88&0xf80000)>>8) + ((RGB88&0xfc00)>>5) + ((RGB88&0xf8)>>3))
 const uint16_t COLOR_BLACK = RGB565(0x0);
@@ -72,9 +73,9 @@ const uint16_t COLOR_BACKGROUND = COLOR_BLACK;
 const uint16_t COLOR_TEXT = COLOR_WHITE;
 
 // Metros
-Chrono  chronoCheckBattery = Chrono(Chrono::MILLIS);
+Chrono  chronoCheckBattery = Chrono(Chrono::SECONDS);
 Chrono  chronoShutDown = Chrono(Chrono::SECONDS);
-Chrono  chronoResetCH4 = Chrono(Chrono::MILLIS);
+Chrono  chronoRewind = Chrono(Chrono::SECONDS);
 
 // Buttons
 Bounce buttonPlay = Bounce();
@@ -120,6 +121,7 @@ std::vector<std::string> playlist;
 long currentPlaylistIndex = 0;
 
 int volume = 255;
+float voltage = 6*1.2f;
 
 typedef struct
 {
@@ -181,7 +183,7 @@ int isBatteryGood(bool ignoreTimer = false)
      1.14 / 3.3 * 1024 - 1: 354
   */
 
-	if (ignoreTimer || chronoCheckBattery.hasPassed(5000, true))
+	if (ignoreTimer || chronoCheckBattery.hasPassed(30, true))
 	{
 		int voltage = analogRead(PIN_BATTERY_PROBE);
 		DEBUG_PRINT_VAR("voltage read", voltage);
@@ -190,7 +192,7 @@ int isBatteryGood(bool ignoreTimer = false)
 		if (voltage < 400)
 			return 0;
 	}
-	return 1;
+	return 0;
 }
 
 void display_text(const char* string, unsigned int x, unsigned int y, unsigned int size = 1, uint16_t color = COLOR_WHITE)
@@ -359,6 +361,42 @@ void setupButtonsAndVolume()
 	analogReadResolution(10);
 }
 
+std::string getRandomFile()
+{
+	if(playlist.size() == 0)
+		return std::string("");
+	currentPlaylistIndex = random(0, playlist.size()-1);
+	return playlist[currentPlaylistIndex];
+}
+
+std::string getNextFile(bool next = true)
+{
+	if(playlist.size() == 0)
+		return std::string("");
+	if(next)
+		currentPlaylistIndex = (currentPlaylistIndex + 1) % playlist.size();
+	else
+	{
+		if(currentPlaylistIndex <= 0)
+			currentPlaylistIndex = playlist.size() - 1;
+		else
+			--currentPlaylistIndex;
+	}
+	return playlist[currentPlaylistIndex];
+}
+
+void playNext(bool next = true)
+{
+	std::string mp3;
+	if(isShuffleDir(currentDirectory))
+		mp3 = getRandomFile();
+	else
+		mp3 = getNextFile(next);
+
+	if(!mp3.empty())
+		play(mp3);
+}
+
 void checkButtons()
 {
 	bool action = false;
@@ -389,9 +427,17 @@ void checkButtons()
 	if(buttonPrev.fell())
 	{
 		DEBUG_PRINTLN("button Prev");
-		musicPlayer.stopPlaying();
-		delay(100);
-		play(currentMP3);
+		if(chronoRewind.hasPassed(REWIND_TIMEOUT))
+		{
+			musicPlayer.stopPlaying();
+			delay(100);
+			play(currentMP3);
+		}
+		else
+		{
+			playNext(false);
+			action = true;
+		}
 		
 		action = true;
 	}
@@ -412,6 +458,7 @@ void play(std::string file)
 		if(musicPlayer.startPlayingFile(SD, file.c_str()))
 		{
 			DEBUG_PRINT_VAR("playing file", file.c_str());
+			chronoRewind.restart(0);
 		}
 		else
 		{
@@ -424,34 +471,6 @@ void play(std::string file)
 	{
 		DEBUG_PRINT_VAR("not a valid mp3 file", file.c_str());
 	}
-}
-
-std::string getRandomFile()
-{
-	if(playlist.size() == 0)
-		return std::string("");
-	currentPlaylistIndex = random(0, playlist.size()-1);
-	return playlist[currentPlaylistIndex];
-}
-
-std::string getNextFile()
-{
-	if(playlist.size() == 0)
-		return std::string("");
-	currentPlaylistIndex = (currentPlaylistIndex + 1) % playlist.size();
-	return playlist[currentPlaylistIndex];
-}
-
-void playNext()
-{
-	std::string mp3;
-	if(isShuffleDir(currentDirectory))
-		mp3 = getRandomFile();
-	else
-		mp3 = getNextFile();
-
-	if(!mp3.empty())
-		play(mp3);
 }
 
 bool isShuffleDir(File directory)
@@ -623,8 +642,8 @@ void checkHeadphonePlugAndVolume()
 	{
 		volume = v;
 		int setVol = map(volume, 0, 255, 42, 255);
-		musicPlayer.setVolume(volume, volume);
-		DEBUG_PRINT_VAR("new volume", volume);
+		musicPlayer.setVolume(setVol, setVol);
+		DEBUG_PRINT_VAR("new volume", setVol);
 	}
 }
 
@@ -727,9 +746,6 @@ void setupActions()
 		const unsigned int BUFFER_SIZE = 64;
 		char buffer[BUFFER_SIZE];
 		unsigned int index = 0;
-		const unsigned int READ_CARD = 0;
-		const unsigned int READ_FILE = 1;
-		unsigned int READ = READ_CARD;
 
 		Action action;
 
@@ -739,7 +755,6 @@ void setupActions()
 	    	if(c == '\n' && skipLine)
 	    	{
 	    		skipLine = false;
-	    		READ = READ_CARD;
 	    		index = 0;
     			action.card[0] = 0x0b;
     			action.card[1] = 0xad;
@@ -753,14 +768,12 @@ void setupActions()
 	    		{
 	    			action.file.assign(buffer, index);
 	    			actions.push_back(action);
-	    			READ = READ_CARD;
 	    			index = 0;
 	    		}
 	    		else if(c == DELIMITER)
 	    		{
 	    			for(unsigned int i = 0; i < 4; ++i)
 	    				action.card[i] = (charToByte(buffer[2*i+0]) << 4) + (charToByte(buffer[2*i+1]));
-	    			READ++;
 	    			index = 0;
 	    		}
 	    		else if(index < BUFFER_SIZE)
@@ -806,10 +819,10 @@ void setup()
 	//while (!Serial) { delay(1); }
 	DEBUG_PRINTLN("setup musikschlumpf... ");
 
+	setupDisplay();
 	setupMusic();
 	setupSD();
 	setupActions();
-	setupDisplay();
 	setupAMP();
 	setupButtonsAndVolume();
 	setupRFID();
