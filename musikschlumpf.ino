@@ -1,4 +1,5 @@
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -388,9 +389,9 @@ std::string getNextFile(bool next = true)
 void playNext(bool next = true)
 {
 	std::string mp3;
-	if(isShuffleDir(currentDirectory))
+/*	if(isShuffleDir(currentDirectory))
 		mp3 = getRandomFile();
-	else
+	else*/
 		mp3 = getNextFile(next);
 
 	if(!mp3.empty())
@@ -454,7 +455,7 @@ void play(std::string file)
 		DEBUG_PRINT_VAR("files test", file.c_str());
 		SD.chdir("/", true);
 		//if(SD.open(file.c_str())) { DEBUG_PRINTLN(" works"); } else {  DEBUG_PRINTLN(" failed"); }
-
+		displayTrack(file);
 		if(musicPlayer.startPlayingFile(SD, file.c_str()))
 		{
 			DEBUG_PRINT_VAR("playing file", file.c_str());
@@ -486,7 +487,7 @@ bool compare(byte a[4], byte b[4])
 			a[3] == b[3];
 }
 
-void generatePlaylist(std::string fullDirectoryPath, File directory)
+void generatePlaylist(std::string fullDirectoryPath, File directory, bool mustEndWithMP3 = true)
 {
 	playlist.clear();
 	currentPlaylistIndex = 0;
@@ -513,6 +514,9 @@ void generatePlaylist(std::string fullDirectoryPath, File directory)
 		if(name[0] == '_')
 			continue;
 
+		if(mustEndWithMP3 && !(strlen(name) > 4 && !strcasecmp(name + strlen(name) - 4, ".mp3")))
+			continue;
+
 		std::string fullFilePath = "/";
 		fullFilePath.append(fullDirectoryPath).append("/").append(name);
 
@@ -520,6 +524,11 @@ void generatePlaylist(std::string fullDirectoryPath, File directory)
 		//if(musicPlayer.isMP3File(fullFilePath.c_str()))
 			playlist.push_back(fullFilePath);
 	}
+
+	if(isShuffleDir(directory))
+		std::random_shuffle(playlist.begin(), playlist.end());
+	else
+		std::sort(playlist.begin(), playlist.end());
 
 	#ifdef DEBUG
 	DEBUG_PRINTLN("playlist:");
@@ -570,7 +579,7 @@ void playByNewCard()
 
 void displayCover(std::string fullDirectoryPath, File directory)
 {
-	display_clear(); delay(100);
+	display_clear(); delay(10);
 	if(directory.exists(COVER_FILE))
 	{
 		currentCover = "/";
@@ -590,11 +599,30 @@ void displayCover(std::string fullDirectoryPath, File directory)
 		display_text(fullDirectoryPath.c_str(), 3, 96);
 }
 
+void displayTrack(std::string mp3)
+{
+	std::string trackArt = mp3;
+	trackArt.append(".bmp");
+	if(SD.exists(trackArt.c_str()))
+	{
+		//display_clear(); delay(10);
+		char *trackArt_cstr = new char[trackArt.length() + 1];
+		strcpy(trackArt_cstr, trackArt.c_str());
+		ImageReturnCode stat = reader.drawBMP(trackArt_cstr, display, 0, 0);
+		delete[] trackArt_cstr;
+
+		if(stat != IMAGE_SUCCESS)
+		{
+			DEBUG_PRINTLN("failed to display cover");
+		}
+	}
+}
+
 void wallpaper()
 {
-	display_clear(); delay(100);
+	display_clear(); delay(10);
 	File wallpaperDir = SD.open(FULL_WALLPAPER_DIR);
-	generatePlaylist("wallpape", wallpaperDir);
+	generatePlaylist("wallpape", wallpaperDir, false);
 	std::string wallpaperPath = getRandomFile();
 
 	playlist.clear();
@@ -642,7 +670,7 @@ void checkHeadphonePlugAndVolume()
 	if(abs(v-volume) > 5)
 	{
 		volume = v;
-		int setVol = map(volume, 0, 255, 42, 255);
+		int setVol = map(volume, 0, 255, 255, 52);
 		musicPlayer.setVolume(setVol, setVol);
 		DEBUG_PRINT_VAR("new volume", setVol);
 	}
