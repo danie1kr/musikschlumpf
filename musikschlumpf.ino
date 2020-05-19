@@ -605,7 +605,8 @@ void displayTrack(std::string mp3)
 	trackArt.append(".bmp");
 	if(SD.exists(trackArt.c_str()))
 	{
-		//display_clear(); delay(10);
+		musicPlayer.stopPlaying();
+		delay(20); display_clear(); delay(20);
 		char *trackArt_cstr = new char[trackArt.length() + 1];
 		strcpy(trackArt_cstr, trackArt.c_str());
 		ImageReturnCode stat = reader.drawBMP(trackArt_cstr, display, 0, 0);
@@ -812,7 +813,12 @@ void setupActions()
 	    		}
 	    	}
 	    }
-    }
+	    if(index > 0)
+	    {
+		    action.file.assign(buffer, index);
+			actions.push_back(action);
+	    }
+	}
     fileActions.close();
 
 #ifdef DEBUG
