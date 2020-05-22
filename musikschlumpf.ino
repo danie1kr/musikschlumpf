@@ -452,10 +452,12 @@ void play(std::string file)
 	if(1)//musicPlayer.isMP3File(file.c_str()))
 	{
 
+		noInterrupts();
 		DEBUG_PRINT_VAR("files test", file.c_str());
 		SD.chdir("/", true);
 		//if(SD.open(file.c_str())) { DEBUG_PRINTLN(" works"); } else {  DEBUG_PRINTLN(" failed"); }
 		displayTrack(file);
+		interrupts();
 		if(musicPlayer.startPlayingFile(SD, file.c_str()))
 		{
 			DEBUG_PRINT_VAR("playing file", file.c_str());
@@ -679,10 +681,12 @@ void checkHeadphonePlugAndVolume()
 
 bool checkRFIDForNewCard()
 {
+	noInterrupts();
 	// Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
 	if ( ! rfid.PICC_IsNewCardPresent())
 	{
 		//DEBUG_PRINTLN("no new card present");
+		interrupts();
 		return false;
 	}
 
@@ -690,6 +694,7 @@ bool checkRFIDForNewCard()
 	if ( ! rfid.PICC_ReadCardSerial())
 	{
 		//DEBUG_PRINTLN("NUID not read");
+		interrupts();
 		return false;
 	}
 
@@ -702,6 +707,7 @@ bool checkRFIDForNewCard()
 		piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
 		piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
 		DEBUG_PRINTLN(F("Your tag is not of type MIFARE Classic."));
+		interrupts();
 		return false;
 	}
 
@@ -738,6 +744,7 @@ bool checkRFIDForNewCard()
 
 	// Stop encryption on PCD
 	rfid.PCD_StopCrypto1();
+	interrupts();
 
 	return retVal;
 }
