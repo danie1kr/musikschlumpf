@@ -422,6 +422,8 @@ void checkButtons()
 	if(buttonNext.fell())
 	{
 		DEBUG_PRINTLN("button Next");
+		musicPlayer.stopPlaying();
+		delay(100);
 		playNext();
 		action = true;
 	}
@@ -545,12 +547,12 @@ void playByNewCard()
 	{
 		if(compare(action.card, nuidPICC))
 		{
-			SD.chdir("/", true);
+			//SD.chdir("/", true);
 			currentPathDirectory = action.file;
-			if(sdRoot.exists(currentPathDirectory.c_str()))
+			//if(sdRoot.exists(currentPathDirectory.c_str()))
 			{
-				if(!musicPlayer.paused())
-					musicPlayer.stopPlaying();
+				musicPlayer.stopPlaying();
+				delay(50);
 				DEBUG_PRINT_VAR("selected directory", currentPathDirectory.c_str());
 				currentDirectory.close();
 				#ifdef DEBUG
@@ -564,10 +566,10 @@ void playByNewCard()
 				playNext();
 				chronoShutDown.restart(0);
 			}
-			else
-			{
-				DEBUG_PRINT_VAR("does not exist in /", currentPathDirectory.c_str());
-			}
+			//else
+			//{
+			//	DEBUG_PRINT_VAR("does not exist in /", currentPathDirectory.c_str());
+			//}
 			return;
 		}
 	}
@@ -594,7 +596,8 @@ void displayCover(std::string fullDirectoryPath, File directory)
 
 		if(stat != IMAGE_SUCCESS)
 		{
-			DEBUG_PRINTLN("failed to display cover");
+			DEBUG_PRINT_VAR("failed to display cover art", currentCover.c_str());
+			DEBUG_PRINT_VAR("status", stat);
 		}
 	}
 	else
@@ -607,7 +610,8 @@ void displayTrack(std::string mp3)
 	trackArt.append(".bmp");
 	if(SD.exists(trackArt.c_str()))
 	{
-		musicPlayer.stopPlaying();
+	//	delay(20);
+	//	musicPlayer.stopPlaying();
 		delay(20); display_clear(); delay(20);
 		char *trackArt_cstr = new char[trackArt.length() + 1];
 		strcpy(trackArt_cstr, trackArt.c_str());
@@ -616,7 +620,8 @@ void displayTrack(std::string mp3)
 
 		if(stat != IMAGE_SUCCESS)
 		{
-			DEBUG_PRINTLN("failed to display cover");
+			DEBUG_PRINT_VAR("failed to display track art", trackArt.c_str());
+			DEBUG_PRINT_VAR("status", stat);
 		}
 	}
 }
@@ -706,8 +711,8 @@ bool checkRFIDForNewCard()
 	if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&  
 		piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
 		piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
-		DEBUG_PRINTLN(F("Your tag is not of type MIFARE Classic."));
 		interrupts();
+		DEBUG_PRINTLN(F("Your tag is not of type MIFARE Classic."));
 		return false;
 	}
 
@@ -823,7 +828,8 @@ void setupActions()
 	    if(index > 0)
 	    {
 		    action.file.assign(buffer, index);
-			actions.push_back(action);
+		    if(sdRoot.exists(action.file.c_str()))
+				actions.push_back(action);
 	    }
 	}
     fileActions.close();
