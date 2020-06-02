@@ -16,7 +16,7 @@
 #include <Wire.h>
 #include "Adafruit_TPA2016.h"
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_PRINT(s)		Serial.print(s)
@@ -107,7 +107,7 @@ MFRC522::MIFARE_Key rfidKey;
 byte nuidPICC[4];
 
 // State
-bool playing = false;
+//bool playing = false;
 bool isAudioBook = false;
 bool isSingleFile = false;
 bool headphonePluggedIn = false;
@@ -124,14 +124,21 @@ long currentPlaylistIndex = 0;
 int volume = 255;
 float voltage = 6*1.2f;
 
+enum State { NO_CARD, PLAY, PAUSE };
+State state = NO_CARD;
+
+enum Action { CONTINUE, PLAY_NEXT, PLAY_PREV, PLAY_SAME, PLAY_PAUSE };
+Action nextAction = CONTINUE;
+Action lastAction = CONTINUE;
+
 typedef struct
 {
 	//std::string card;
 	byte card[4];
 	std::string file;
-} Action;
+} Card;
 
-std::vector<Action> actions;
+std::vector<Card> cards;
 
 /// File listing helper
 void printDirectory(File dir, int numTabs) {
@@ -405,8 +412,12 @@ void checkButtons()
 	buttonPrev.update();
 	buttonNext.update();
 
+	if(state == NO_CARD)
+		return;
+
 	if(buttonPlay.fell())
 	{
+		nextAction = PLAY_PAUSE;/*
 		DEBUG_PRINT("button Play: ");
 		if (! musicPlayer.paused()) {
 			DEBUG_PRINTLN("Paused");
@@ -416,30 +427,35 @@ void checkButtons()
 			musicPlayer.pausePlaying(false);
 		}
 		playing = musicPlayer.paused();
-
+*/
 		action = true;
 	}
 	if(buttonNext.fell())
 	{
+		nextAction = PLAY_NEXT;
+		/*
 		DEBUG_PRINTLN("button Next");
 		musicPlayer.stopPlaying();
 		delay(100);
-		playNext();
+		playNext();*/
 		action = true;
 	}
 	if(buttonPrev.fell())
 	{
+		
 		DEBUG_PRINTLN("button Prev");
 		if(chronoRewind.hasPassed(REWIND_TIMEOUT))
 		{
+			nextAction = PLAY_SAME;
+			/*
 			musicPlayer.stopPlaying();
 			delay(100);
-			play(currentMP3);
+			play(currentMP3);*/
 		}
 		else
 		{
-			playNext(false);
-			action = true;
+			nextAction = PLAY_PREV;
+			//playNext(false);
 		}
 		
 		action = true;
@@ -454,12 +470,12 @@ void play(std::string file)
 	if(1)//musicPlayer.isMP3File(file.c_str()))
 	{
 
-		noInterrupts();
+		//noInterrupts();
 		DEBUG_PRINT_VAR("files test", file.c_str());
 		SD.chdir("/", true);
 		//if(SD.open(file.c_str())) { DEBUG_PRINTLN(" works"); } else {  DEBUG_PRINTLN(" failed"); }
 		displayTrack(file);
-		interrupts();
+		//interrupts();
 		if(musicPlayer.startPlayingFile(SD, file.c_str()))
 		{
 			DEBUG_PRINT_VAR("playing file", file.c_str());
@@ -467,14 +483,12 @@ void play(std::string file)
 		}
 		else
 		{
+			delay(200);
+			nextAction = PLAY_SAME;
 			DEBUG_PRINT_VAR("playing file failed", file.c_str());
 		}
 		currentMP3 = file;
 
-	}
-	else
-	{
-		DEBUG_PRINT_VAR("not a valid mp3 file", file.c_str());
 	}
 }
 
@@ -543,12 +557,12 @@ void generatePlaylist(std::string fullDirectoryPath, File directory, bool mustEn
 
 void playByNewCard()
 {
-	for(auto &action: actions)
+	for(auto &card: cards)
 	{
-		if(compare(action.card, nuidPICC))
+		if(compare(card.card, nuidPICC))
 		{
 			//SD.chdir("/", true);
-			currentPathDirectory = action.file;
+			currentPathDirectory = card.file;
 			//if(sdRoot.exists(currentPathDirectory.c_str()))
 			{
 				musicPlayer.stopPlaying();
@@ -563,7 +577,9 @@ void playByNewCard()
 				currentDirectory.open(&sdRoot, currentPathDirectory.c_str(), O_RDONLY);
 				generatePlaylist(currentPathDirectory, currentDirectory);
 				displayCover(currentPathDirectory, currentDirectory);
-				playNext();
+				nextAction = PLAY_NEXT;
+				state = PLAY;
+				//playNext();
 				chronoShutDown.restart(0);
 			}
 			//else
@@ -583,7 +599,7 @@ void playByNewCard()
 
 void displayCover(std::string fullDirectoryPath, File directory)
 {
-	display_clear(); delay(10);
+	delay(20);// display_clear(); delay(10);
 	if(directory.exists(COVER_FILE))
 	{
 		currentCover = "/";
@@ -606,13 +622,14 @@ void displayCover(std::string fullDirectoryPath, File directory)
 
 void displayTrack(std::string mp3)
 {
+	delay(50);
 	std::string trackArt = mp3;
 	trackArt.append(".bmp");
 	if(SD.exists(trackArt.c_str()))
 	{
 	//	delay(20);
 	//	musicPlayer.stopPlaying();
-		delay(20); display_clear(); delay(20);
+		delay(20);// display_clear(); delay(20);
 		char *trackArt_cstr = new char[trackArt.length() + 1];
 		strcpy(trackArt_cstr, trackArt.c_str());
 		ImageReturnCode stat = reader.drawBMP(trackArt_cstr, display, 0, 0);
@@ -779,7 +796,7 @@ byte charToByte(char c)
 	return b;
 }
 
-void setupActions()
+void setupCards()
 {
 	File fileActions = SD.open(ACTIONS_FILE);
 	if (fileActions)
@@ -789,7 +806,7 @@ void setupActions()
 		char buffer[BUFFER_SIZE];
 		unsigned int index = 0;
 
-		Action action;
+		Card card;
 
 	    while (fileActions.available())
 	    {
@@ -798,24 +815,24 @@ void setupActions()
 	    	{
 	    		skipLine = false;
 	    		index = 0;
-    			action.card[0] = 0x0b;
-    			action.card[1] = 0xad;
-    			action.card[2] = 0xf0;
-    			action.card[3] = 0x0d;
-    			action.file = "";
+    			card.card[0] = 0x0b;
+    			card.card[1] = 0xad;
+    			card.card[2] = 0xf0;
+    			card.card[3] = 0x0d;
+    			card.file = "";
 	    	}
 	    	else if(!skipLine)
 	    	{
 	    		if(c == '\n')
 	    		{
-	    			action.file.assign(buffer, index);
-	    			actions.push_back(action);
+	    			card.file.assign(buffer, index);
+	    			cards.push_back(card);
 	    			index = 0;
 	    		}
 	    		else if(c == DELIMITER)
 	    		{
 	    			for(unsigned int i = 0; i < 4; ++i)
-	    				action.card[i] = (charToByte(buffer[2*i+0]) << 4) + (charToByte(buffer[2*i+1]));
+	    				card.card[i] = (charToByte(buffer[2*i+0]) << 4) + (charToByte(buffer[2*i+1]));
 	    			index = 0;
 	    		}
 	    		else if(index < BUFFER_SIZE)
@@ -827,19 +844,19 @@ void setupActions()
 	    }
 	    if(index > 0)
 	    {
-		    action.file.assign(buffer, index);
-		    if(sdRoot.exists(action.file.c_str()))
-				actions.push_back(action);
+		    card.file.assign(buffer, index);
+		    if(sdRoot.exists(card.file.c_str()))
+				cards.push_back(card);
 	    }
 	}
     fileActions.close();
 
 #ifdef DEBUG
     Serial.println("I parsed the following actions:");
-	for(auto& action: actions) {
-		printHex(action.card, 4);
+	for(auto& card: cards) {
+		printHex(card.card, 4);
 	    Serial.print(":");
-		Serial.println(action.file.c_str());
+		Serial.println(card.file.c_str());
 	}
 	Serial.println("");
 #endif
@@ -870,7 +887,7 @@ void setup()
 	setupDisplay();
 	setupMusic();
 	setupSD();
-	setupActions();
+	setupCards();
 	setupAMP();
 	setupButtonsAndVolume();
 	setupRFID();
@@ -884,6 +901,9 @@ void setup()
 
 void loop()
 {
+	lastAction = nextAction;
+	nextAction = CONTINUE;
+
 	checkButtons();
 	checkHeadphonePlugAndVolume();
 
@@ -896,6 +916,64 @@ void loop()
 	{
 		DEBUG_PRINTLN("goodbye");
 		digitalWrite(PIN_SHUTDOWN, HIGH);
+	}
+
+	if(lastAction == PLAY_SAME && nextAction == PLAY_SAME)
+	{
+		DEBUG_PRINT("Something bad happened :(");
+		delay(1000);
+	}
+
+	if(nextAction == CONTINUE && state == PLAY && musicPlayer.stopped())
+		nextAction = PLAY_NEXT;
+
+	switch(nextAction)
+	{
+		case PLAY_PAUSE:
+		{
+			DEBUG_PRINT("action Play: ");
+			if (! musicPlayer.paused()) {
+				DEBUG_PRINTLN("Paused");
+				musicPlayer.pausePlaying(true);
+				state = PAUSE;
+			} else { 
+				DEBUG_PRINTLN("Resumed");
+				musicPlayer.pausePlaying(false);
+				state = PLAY;
+			}
+			//playing = musicPlayer.paused();
+			break;
+		}
+		case PLAY_NEXT:
+		{
+			DEBUG_PRINTLN("action Next");
+			musicPlayer.stopPlaying();
+			delay(100);
+			playNext(true);
+			state = PLAY;
+			break;
+		}
+		case PLAY_PREV:
+		{
+			DEBUG_PRINTLN("action Prev");
+			musicPlayer.stopPlaying();
+			delay(100);
+			playNext(false);
+			state = PLAY;
+			break;
+		}	
+		case PLAY_SAME:
+		{
+			DEBUG_PRINTLN("action Same");
+			musicPlayer.stopPlaying();
+			delay(100);
+			play(currentMP3);
+			state = PLAY;
+			break;
+		}
+		case CONTINUE:
+		default:
+			break;
 	}
 
 	delay(25);
