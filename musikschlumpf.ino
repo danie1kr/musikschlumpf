@@ -216,6 +216,7 @@ void display_init()
 {
 	display_clear();
 	display_text("Musikschlumpf", 4, 48, 1, COLOR_WHITE);
+	delay(200);
 }
 
 void display_hello()
