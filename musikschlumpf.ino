@@ -214,7 +214,9 @@ void display_text(const char* string, unsigned int x, unsigned int y, unsigned i
 
 void display_init()
 {
+	//delay(200);
 	display_clear();
+	delay(200);
 	display_text("Musikschlumpf", 4, 48, 1, COLOR_WHITE);
 	delay(200);
 }
@@ -223,12 +225,17 @@ void display_hello()
 {
 	display_clear();
 	//display_text("Musikschlumpf bereit", 4, 48, 1, COLOR_WHITE);
+	delay(200);
 	wallpaper();
+	delay(200);
 }
 
 void display_clear()
 {
+	display.setCursor(0, 0);
 	display.fillScreen(COLOR_BACKGROUND);
+	delay(200);
+	display.setCursor(0, 0);
 }
 
 void display_status()
@@ -261,10 +268,14 @@ void printDec(byte *buffer, byte bufferSize) {
 void setupDisplay()
 {
 	DEBUG_PRINT("setup Display... ");
-
+	delay(800);
 	display.begin();
+	delay(800);
+	display.setCursor(0, 0);
 	display.setRotation(DISPLAY_ROTATION);
+	delay(800);
 	display_init();
+	display.setCursor(0, 0);
 
 	DEBUG_PRINTLN("done");
 }
@@ -691,7 +702,8 @@ void checkHeadphonePlugAndVolume()
 		}
 	}
 
-	int v = analogRead(PIN_POT_VOLUME) / 4;
+	int v = 224; //analogRead(PIN_POT_VOLUME) / 4;
+	//DEBUG_PRINT_VAR("volume potentiometer", v);
 
 	if(abs(v-volume) > 5)
 	{
@@ -908,7 +920,7 @@ void loop()
 	checkButtons();
 	checkHeadphonePlugAndVolume();
 
-	isBatteryGood();
+	//isBatteryGood();
 
 	if(checkRFIDForNewCard())
 		playByNewCard();
