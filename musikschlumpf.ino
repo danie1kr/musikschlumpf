@@ -216,9 +216,9 @@ void display_init()
 {
 	//delay(200);
 	display_clear();
-	delay(200);
+	delay(800);
 	display_text("Musikschlumpf", 4, 48, 1, COLOR_WHITE);
-	delay(200);
+	delay(800);
 }
 
 void display_hello()
@@ -233,9 +233,11 @@ void display_hello()
 void display_clear()
 {
 	display.setCursor(0, 0);
+	delay(800);
 	display.fillScreen(COLOR_BACKGROUND);
 	delay(200);
 	display.setCursor(0, 0);
+	delay(800);
 }
 
 void display_status()
@@ -702,7 +704,7 @@ void checkHeadphonePlugAndVolume()
 		}
 	}
 
-	int v = 224; //analogRead(PIN_POT_VOLUME) / 4;
+	int v = analogRead(PIN_POT_VOLUME) / 4;
 	//DEBUG_PRINT_VAR("volume potentiometer", v);
 
 	if(abs(v-volume) > 5)
