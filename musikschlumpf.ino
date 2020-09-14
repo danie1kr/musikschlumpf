@@ -49,8 +49,7 @@ const int PIN_OLED_DC = 9;
 const int PIN_OLED_RST = -1;
 
 #define PIN_MFRC522_CS 3
-#define PIN_MFRC522_RST 4// UINT8_MAX //;//4;
-//const int PIN_MFRC522_IRQ = 0;
+#define PIN_MFRC522_RST 4
 
 const int PIN_BUTTON_PLAY = A3;
 const int PIN_BUTTON_NEXT = A2;
@@ -102,7 +101,7 @@ Adafruit_TPA2016 audioamp = Adafruit_TPA2016();
 
 
 // RFID
-MFRC522 rfid(PIN_MFRC522_CS, PIN_MFRC522_RST); // Instance of the class
+MFRC522 rfid(PIN_MFRC522_CS, PIN_MFRC522_RST);
 MFRC522::MIFARE_Key rfidKey;
 byte nuidPICC[4];
 
@@ -133,7 +132,6 @@ Action lastAction = CONTINUE;
 
 typedef struct
 {
-	//std::string card;
 	byte card[4];
 	std::string file;
 } Card;
@@ -146,8 +144,6 @@ void printDirectory(File dir, int numTabs) {
      
      File entry =  dir.openNextFile();
      if (! entry) {
-       // no more files
-       //Serial.println("**nomorefiles**");
        break;
      }
      for (uint8_t i=0; i<numTabs; i++) {
@@ -157,7 +153,6 @@ void printDirectory(File dir, int numTabs) {
      size_t l = 128;
      entry.getName(n, l);
      Serial.print(n);
-     //Serial.print(entry.name());
      if (entry.isDirectory()) {
        Serial.println("/");
        printDirectory(entry, numTabs+1);
@@ -216,15 +211,14 @@ void display_init()
 {
 	//delay(200);
 	display_clear();
-	delay(800);
+	//delay(800);
 	display_text("Musikschlumpf", 4, 48, 1, COLOR_WHITE);
-	delay(800);
+	//delay(800);
 }
 
 void display_hello()
 {
 	display_clear();
-	//display_text("Musikschlumpf bereit", 4, 48, 1, COLOR_WHITE);
 	delay(200);
 	wallpaper();
 	delay(200);
@@ -233,11 +227,11 @@ void display_hello()
 void display_clear()
 {
 	display.setCursor(0, 0);
-	delay(800);
+	delay(100);
 	display.fillScreen(COLOR_BACKGROUND);
-	delay(200);
+	delay(100);
 	display.setCursor(0, 0);
-	delay(800);
+	delay(100);
 }
 
 void display_status()
@@ -247,9 +241,6 @@ void display_status()
 	//	display_text("play", 9, 2, 2, COLOR_WHITE);
 }
 
-/**
- * Helper routine to dump a byte array as hex values to Serial. 
- */
 void printHex(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
@@ -257,9 +248,6 @@ void printHex(byte *buffer, byte bufferSize) {
   }
 }
 
-/**
- * Helper routine to dump a byte array as dec values to Serial.
- */
 void printDec(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 10 ? " 0" : " ");
@@ -270,12 +258,12 @@ void printDec(byte *buffer, byte bufferSize) {
 void setupDisplay()
 {
 	DEBUG_PRINT("setup Display... ");
-	delay(800);
+	delay(200);
 	display.begin();
-	delay(800);
+	delay(200);
 	display.setCursor(0, 0);
 	display.setRotation(DISPLAY_ROTATION);
-	delay(800);
+	delay(200);
 	display_init();
 	display.setCursor(0, 0);
 
@@ -286,9 +274,9 @@ void setupSD()
 {
 	DEBUG_PRINT("setup SD... ");
 
-	if(!SD.begin(PIN_SDCARD_CS, SD_SCK_MHZ(10))) { // Breakouts require 10 MHz limit due to longer wires
+	if(!SD.begin(PIN_SDCARD_CS, SD_SCK_MHZ(10))) {
 		Serial.println(F("SD begin() failed"));
-		for(;;); // Fatal error, do not continue
+		for(;;);
 	}
 
 	sdRoot = SD.open("/");
@@ -304,15 +292,12 @@ void setupMusic()
 {
 	DEBUG_PRINT("setup Music... ");
 
-	if (! musicPlayer.begin()) { // initialise the music player
+	if (! musicPlayer.begin()) {
 		Serial.println(F("Couldn't find VS1053, do you have the right pins defined?"));
 		while (1);
 	}
 
 	DEBUG_PRINT(F("VS1053 found"));
-
-	// list files
-	//printDirectory(SD.open("/"), 0);
 
 	// Set volume for left, right channels. lower numbers == louder volume!
 	musicPlayer.setVolume(volume, volume);
@@ -339,21 +324,11 @@ void setupRFID()
 {
 	DEBUG_PRINT("setup RFID... ");
 
-	//SPI.begin(); // Init SPI bus
-	rfid.PCD_Init(); // Init MFRC522 
-	/*rfid.PCD_DumpVersionToSerial();
-	if (rfid.PCD_PerformSelfTest())
-	{
-		//DEBUG_PRINTLN("Passed Self-Test");
-	}*/
+	rfid.PCD_Init();
 
 	for (byte i = 0; i < 6; i++) {
 		rfidKey.keyByte[i] = 0xFF;
 	}
-
-	//Serial.println(F("This code scan the MIFARE Classsic NUID."));
-	//Serial.print(F("Using the following key:"));
-	//printHex(rfidKey.keyByte, MFRC522::MF_KEY_SIZE);
 
 	DEBUG_PRINTLN(" done");
 }
@@ -381,6 +356,8 @@ void setupButtonsAndVolume()
 
 	// PIN_POT_VOLUME
 	analogReadResolution(10);
+
+	checkHeadphonePlugAndVolume();
 }
 
 std::string getRandomFile()
@@ -431,27 +408,12 @@ void checkButtons()
 
 	if(buttonPlay.fell())
 	{
-		nextAction = PLAY_PAUSE;/*
-		DEBUG_PRINT("button Play: ");
-		if (! musicPlayer.paused()) {
-			DEBUG_PRINTLN("Paused");
-			musicPlayer.pausePlaying(true);
-		} else { 
-			DEBUG_PRINTLN("Resumed");
-			musicPlayer.pausePlaying(false);
-		}
-		playing = musicPlayer.paused();
-*/
+		nextAction = PLAY_PAUSE;
 		action = true;
 	}
 	if(buttonNext.fell())
 	{
 		nextAction = PLAY_NEXT;
-		/*
-		DEBUG_PRINTLN("button Next");
-		musicPlayer.stopPlaying();
-		delay(100);
-		playNext();*/
 		action = true;
 	}
 	if(buttonPrev.fell())
@@ -461,15 +423,10 @@ void checkButtons()
 		if(chronoRewind.hasPassed(REWIND_TIMEOUT))
 		{
 			nextAction = PLAY_SAME;
-			/*
-			musicPlayer.stopPlaying();
-			delay(100);
-			play(currentMP3);*/
 		}
 		else
 		{
 			nextAction = PLAY_PREV;
-			//playNext(false);
 		}
 		
 		action = true;
@@ -481,15 +438,12 @@ void checkButtons()
 
 void play(std::string file)
 {
-	if(1)//musicPlayer.isMP3File(file.c_str()))
+	if(1)
 	{
 
-		//noInterrupts();
 		DEBUG_PRINT_VAR("files test", file.c_str());
 		SD.chdir("/", true);
-		//if(SD.open(file.c_str())) { DEBUG_PRINTLN(" works"); } else {  DEBUG_PRINTLN(" failed"); }
 		displayTrack(file);
-		//interrupts();
 		if(musicPlayer.startPlayingFile(SD, file.c_str()))
 		{
 			DEBUG_PRINT_VAR("playing file", file.c_str());
@@ -499,7 +453,11 @@ void play(std::string file)
 		{
 			delay(200);
 			nextAction = PLAY_SAME;
+			display_clear();
+			display_text("Datei kaputt:", 4, 48, 1, COLOR_WHITE);
+			display_text(file.c_str(), 4, 64, 1, COLOR_WHITE);
 			DEBUG_PRINT_VAR("playing file failed", file.c_str());
+			delay(5000);
 		}
 		currentMP3 = file;
 
@@ -553,8 +511,7 @@ void generatePlaylist(std::string fullDirectoryPath, File directory, bool mustEn
 		fullFilePath.append(fullDirectoryPath).append("/").append(name);
 
 		DEBUG_PRINT_VAR("full path is", fullFilePath.c_str());
-		//if(musicPlayer.isMP3File(fullFilePath.c_str()))
-			playlist.push_back(fullFilePath);
+		playlist.push_back(fullFilePath);
 	}
 
 	if(isShuffleDir(directory))
@@ -575,9 +532,7 @@ void playByNewCard()
 	{
 		if(compare(card.card, nuidPICC))
 		{
-			//SD.chdir("/", true);
 			currentPathDirectory = card.file;
-			//if(sdRoot.exists(currentPathDirectory.c_str()))
 			{
 				musicPlayer.stopPlaying();
 				delay(50);
@@ -593,13 +548,8 @@ void playByNewCard()
 				displayCover(currentPathDirectory, currentDirectory);
 				nextAction = PLAY_NEXT;
 				state = PLAY;
-				//playNext();
 				chronoShutDown.restart(0);
 			}
-			//else
-			//{
-			//	DEBUG_PRINT_VAR("does not exist in /", currentPathDirectory.c_str());
-			//}
 			return;
 		}
 	}
@@ -613,7 +563,7 @@ void playByNewCard()
 
 void displayCover(std::string fullDirectoryPath, File directory)
 {
-	delay(20);// display_clear(); delay(10);
+	delay(20);
 	if(directory.exists(COVER_FILE))
 	{
 		currentCover = "/";
@@ -641,9 +591,7 @@ void displayTrack(std::string mp3)
 	trackArt.append(".bmp");
 	if(SD.exists(trackArt.c_str()))
 	{
-	//	delay(20);
-	//	musicPlayer.stopPlaying();
-		delay(20);// display_clear(); delay(20);
+		delay(20);
 		char *trackArt_cstr = new char[trackArt.length() + 1];
 		strcpy(trackArt_cstr, trackArt.c_str());
 		ImageReturnCode stat = reader.drawBMP(trackArt_cstr, display, 0, 0);
@@ -705,8 +653,6 @@ void checkHeadphonePlugAndVolume()
 	}
 
 	int v = analogRead(PIN_POT_VOLUME) / 4;
-	//DEBUG_PRINT_VAR("volume potentiometer", v);
-
 	if(abs(v-volume) > 5)
 	{
 		volume = v;
@@ -719,10 +665,8 @@ void checkHeadphonePlugAndVolume()
 bool checkRFIDForNewCard()
 {
 	noInterrupts();
-	// Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
 	if ( ! rfid.PICC_IsNewCardPresent())
 	{
-		//DEBUG_PRINTLN("no new card present");
 		interrupts();
 		return false;
 	}
@@ -730,7 +674,6 @@ bool checkRFIDForNewCard()
 	// Verify if the NUID has been readed
 	if ( ! rfid.PICC_ReadCardSerial())
 	{
-		//DEBUG_PRINTLN("NUID not read");
 		interrupts();
 		return false;
 	}
@@ -891,12 +834,11 @@ void setup()
 	pinMode(PIN_MFRC522_CS, OUTPUT);
 	digitalWrite(PIN_MFRC522_CS, HIGH);
 
-	SPI.begin(); // Init SPI bus
+	SPI.begin();
 	Serial.begin(9600);
 	#ifdef DEBUG
 	delay(2000);
 	#endif
-	//while (!Serial) { delay(1); }
 	DEBUG_PRINTLN("setup musikschlumpf... ");
 
 	setupDisplay();
@@ -936,7 +878,11 @@ void loop()
 	if(lastAction == PLAY_SAME && nextAction == PLAY_SAME)
 	{
 		DEBUG_PRINT("Something bad happened :(");
-		delay(1000);
+		display_clear();
+		display_text("Something bad happened :(", 4, 48, 1, COLOR_WHITE);
+		display_text("lets try again", 4, 64, 1, COLOR_WHITE);
+		delay(6000);
+		playByNewCard();
 	}
 
 	if(nextAction == CONTINUE && state == PLAY && musicPlayer.stopped())
@@ -956,7 +902,6 @@ void loop()
 				musicPlayer.pausePlaying(false);
 				state = PLAY;
 			}
-			//playing = musicPlayer.paused();
 			break;
 		}
 		case PLAY_NEXT:
