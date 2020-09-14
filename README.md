@@ -11,7 +11,7 @@ Plugging in a head phone disables the speakers.
 
 In summary, the musikschlumpf is simlar to a [TonUINO](https://www.voss.earth/tonuino/) but as there are more advanced requirements (cover art, headphone functionality), the result was a completly different approach.
 
-The schematics can be found [here](doc/musikschlumpf_schematics.pdf) and the PCB [here](doc/musikschlumpf_pcb.pdf) for reference.
+The schematics can be found [here](doc/musikschlumpf_schematics.pdf) for reference.
 
 ## parts list
  * [adafruit itsy bitsy m4](https://www.adafruit.com/product/3800)
@@ -27,5 +27,7 @@ The schematics can be found [here](doc/musikschlumpf_schematics.pdf) and the PCB
 
 ## errata :/
 Feather board miso/mosi pins are switched
+
 Never use pin13 for something which should not be high on boot
+
 you might want to change the SD usage in Adafruit_vs1053 as attached in Schlumpf_Adafruit_VS1053, see startPlayingFile
