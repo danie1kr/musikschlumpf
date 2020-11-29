@@ -219,19 +219,20 @@ void display_init()
 void display_hello()
 {
 	display_clear();
-	delay(200);
+	delay(50);
 	wallpaper();
-	delay(200);
+	delay(50);
 }
 
 void display_clear()
 {
+	delay(50);
 	display.setCursor(0, 0);
-	delay(100);
+	delay(50);
 	display.fillScreen(COLOR_BACKGROUND);
-	delay(100);
+	delay(50);
 	display.setCursor(0, 0);
-	delay(100);
+	delay(50);
 }
 
 void display_status()
@@ -258,12 +259,12 @@ void printDec(byte *buffer, byte bufferSize) {
 void setupDisplay()
 {
 	DEBUG_PRINT("setup Display... ");
-	delay(200);
+	delay(50);
 	display.begin();
-	delay(200);
+	delay(50);
 	display.setCursor(0, 0);
 	display.setRotation(DISPLAY_ROTATION);
-	delay(200);
+	delay(50);
 	display_init();
 	display.setCursor(0, 0);
 
@@ -480,7 +481,8 @@ bool compare(byte a[4], byte b[4])
 void generatePlaylist(std::string fullDirectoryPath, File directory, bool mustEndWithMP3 = true)
 {
 	playlist.clear();
-	currentPlaylistIndex = 0;
+	//currentPlaylistIndex = 0;
+	currentPlaylistIndex = playlist.size() - 1;
 
 	size_t NAME_LEN = 128;
 	char name[NAME_LEN];
@@ -847,9 +849,8 @@ void setup()
 	setupCards();
 	setupAMP();
 	setupButtonsAndVolume();
-	setupRFID();
-
 	setupRandomizer();
+	setupRFID();
 
 	display_hello();
 
